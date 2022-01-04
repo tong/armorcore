@@ -3601,6 +3601,13 @@ namespace {
 		krom->Set(String::NewFromUtf8(isolate, "getArg").ToLocalChecked(), FunctionTemplate::New(isolate, krom_get_arg));
 		krom->Set(String::NewFromUtf8(isolate, "getFilesLocation").ToLocalChecked(), FunctionTemplate::New(isolate, krom_get_files_location));
 		krom->Set(String::NewFromUtf8(isolate, "httpRequest").ToLocalChecked(), FunctionTemplate::New(isolate, krom_http_request));
+		krom->Set(String::NewFromUtf8(isolate, "openSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_open));
+		krom->Set(String::NewFromUtf8(isolate, "listenSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_listen));
+		krom->Set(String::NewFromUtf8(isolate, "acceptSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_accept));
+		krom->Set(String::NewFromUtf8(isolate, "connectSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_connect));
+		krom->Set(String::NewFromUtf8(isolate, "readSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_read));
+		krom->Set(String::NewFromUtf8(isolate, "writeSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_write));
+		krom->Set(String::NewFromUtf8(isolate, "destroySocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_destroy));
 		krom->Set(String::NewFromUtf8(isolate, "setBoolCompute").ToLocalChecked(), FunctionTemplate::New(isolate, krom_set_bool_compute));
 		krom->Set(String::NewFromUtf8(isolate, "setIntCompute").ToLocalChecked(), FunctionTemplate::New(isolate, krom_set_int_compute));
 		krom->Set(String::NewFromUtf8(isolate, "setFloatCompute").ToLocalChecked(), FunctionTemplate::New(isolate, krom_set_float_compute));
