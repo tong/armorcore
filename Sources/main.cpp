@@ -20,6 +20,7 @@
 #include <kinc/threads/thread.h>
 #include <kinc/threads/mutex.h>
 #include <kinc/network/http.h>
+#include <kinc/network/socket.h>
 #include <kinc/graphics4/shader.h>
 #include <kinc/graphics4/vertexbuffer.h>
 #include <kinc/graphics4/indexbuffer.h>
@@ -28,6 +29,13 @@
 #include <kinc/graphics4/rendertarget.h>
 #include <kinc/graphics4/texture.h>
 #include <kinc/compute/compute.h>
+
+#if defined(KORE_POSIX)
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#endif
+
 #ifdef KORE_LZ4X
 extern "C" int LZ4_decompress_safe(const char *source, char *dest, int compressedSize, int maxOutputSize);
 #else
@@ -2396,6 +2404,121 @@ namespace {
 		#else
 		kinc_http_request(url_base, url_path, NULL, 443, true, 0, NULL, &krom_http_callback, cbd);
 		#endif
+	}
+
+	void krom_socket_connect(const FunctionCallbackInfo<Value> &args) {
+		HandleScope scope(args.GetIsolate());
+		unsigned int port = args[0]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		unsigned int host = args[1]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		kinc_socket_t *sock = (kinc_socket_t *)malloc(sizeof(kinc_socket_t));
+		kinc_socket_init(sock);
+		sock->handle = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		if (kinc_socket_connect(sock, host, port)) {
+			printf("SET NON BLOCKING MODE\n");
+			int value = 1;
+			if (fcntl(sock->handle, F_SETFL, O_NONBLOCK, value) == -1) {
+				kinc_log(KINC_LOG_LEVEL_ERROR, "Could not set non-blocking mode.");
+				return;
+			}
+			Local<ObjectTemplate> templ = ObjectTemplate::New(isolate);
+			templ->SetInternalFieldCount(1);
+			Local<Object> obj = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
+			obj->SetInternalField(0, External::New(isolate, sock));
+			// Local<String> name = String::NewFromUtf8(isolate, "").ToLocalChecked();
+			args.GetReturnValue().Set(obj);
+		}
+	}
+
+	void krom_socket_open(const FunctionCallbackInfo<Value> &args) {
+		HandleScope scope(args.GetIsolate());
+		unsigned int port = args[0]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		unsigned int host = args[1]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		kinc_socket_protocol protocol = (kinc_socket_protocol)args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		bool blocking = args[3]->ToBoolean(isolate)->Value();
+		printf("SERVER BLOCKING %i\n", blocking);
+		kinc_socket_t *server = (kinc_socket_t *)malloc(sizeof(kinc_socket_t));
+		kinc_socket_init(server);
+		kinc_socket_options_t *options = (kinc_socket_options_t *)malloc(sizeof(kinc_socket_options_t));
+		kinc_socket_options_set_defaults(options);
+		options->non_blocking = blocking;
+		if(kinc_socket_open(server, protocol, port, options)) {
+			Local<ObjectTemplate> templ = ObjectTemplate::New(isolate);
+			templ->SetInternalFieldCount(1);
+			Local<Object> obj = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
+			obj->SetInternalField(0, External::New(isolate, server));
+			// Local<String> name = String::NewFromUtf8(isolate, "").ToLocalChecked(); //????
+			args.GetReturnValue().Set(obj);
+		}
+	}
+	
+	void krom_socket_listen(const FunctionCallbackInfo<Value> &args) {
+		HandleScope scope(args.GetIsolate());
+		Local<External> field = Local<External>::Cast(args[0]->ToObject(isolate->GetCurrentContext()).ToLocalChecked()->GetInternalField(0));
+		kinc_socket_t *sock = (kinc_socket_t *)field->Value();
+		unsigned int connections = args[1]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		bool listening = kinc_socket_listen(sock, connections);
+		args.GetReturnValue().Set(Boolean::New(isolate, listening));
+	}
+	
+	void krom_socket_accept(const FunctionCallbackInfo<Value> &args) {
+		HandleScope scope(args.GetIsolate());
+		Local<External> field = Local<External>::Cast(args[0]->ToObject(isolate->GetCurrentContext()).ToLocalChecked()->GetInternalField(0));
+		kinc_socket_t *server = (kinc_socket_t *)field->Value();
+		kinc_socket_t *client = (kinc_socket_t *)malloc(sizeof(kinc_socket_t));
+		kinc_socket_init(client);
+
+		/* printf("SET NON BLOCKING MODE\n");
+		int value = 1;
+		if (fcntl(client->handle, F_SETFL, O_NONBLOCK, value) == -1) {
+			kinc_log(KINC_LOG_LEVEL_ERROR, "Could not set non-blocking mode.");
+			// return false;
+		}
+ */
+		printf(">>>>>>> 1\n");
+
+		unsigned int remoteAddress, remotePort;
+		if(kinc_socket_accept(server, client, &remoteAddress, &remotePort )) {
+			printf(">>>>>>> 2\n");
+			Local<ObjectTemplate> templ = ObjectTemplate::New(isolate);
+			templ->SetInternalFieldCount(1);
+			Local<Object> obj = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
+			obj->SetInternalField(0, External::New(isolate, client));
+			obj->Set(isolate->GetCurrentContext(), String::NewFromUtf8(isolate, "remoteAddress").ToLocalChecked(), Int32::New(isolate, remoteAddress));
+			obj->Set(isolate->GetCurrentContext(), String::NewFromUtf8(isolate, "remotePort").ToLocalChecked(), Int32::New(isolate, remotePort));
+			args.GetReturnValue().Set(obj);
+		}
+	}
+
+	void krom_socket_read(const FunctionCallbackInfo<Value> &args) {
+		HandleScope scope(args.GetIsolate());
+		Local<External> field = Local<External>::Cast(args[0]->ToObject(isolate->GetCurrentContext()).ToLocalChecked()->GetInternalField(0));
+		kinc_socket_t *sock = (kinc_socket_t *)field->Value();
+		unsigned int size = args[1]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		unsigned char buf[size];
+		unsigned int bytes = kinc_socket_receive_connected(sock, buf, size);
+		if(bytes > 0) {
+			Local<ArrayBuffer> ab = ArrayBuffer::New(isolate, bytes);
+			memcpy(ab->GetContents().Data(), buf, bytes);
+			args.GetReturnValue().Set(ab); 
+		}
+	}
+
+	void krom_socket_write(const FunctionCallbackInfo<Value> &args) {
+		HandleScope scope(args.GetIsolate());
+		Local<External> field = Local<External>::Cast(args[0]->ToObject(isolate->GetCurrentContext()).ToLocalChecked()->GetInternalField(0));
+		kinc_socket_t *sock = (kinc_socket_t *)field->Value();
+		Local<ArrayBuffer> buffer = Local<ArrayBuffer>::Cast(args[1]);
+		ArrayBuffer::Contents content = buffer->GetContents();
+		int sent = kinc_socket_send_connected(sock, (const unsigned char *)content.Data(), (int)content.ByteLength());
+		args.GetReturnValue().Set(sent);
+	}
+
+	void krom_socket_destroy(const FunctionCallbackInfo<Value> &args) {
+		HandleScope scope(args.GetIsolate());
+		Local<External> field = Local<External>::Cast(args[0]->ToObject(isolate->GetCurrentContext()).ToLocalChecked()->GetInternalField(0));
+		kinc_socket_t *sock = (kinc_socket_t *)field->Value();
+		kinc_socket_destroy(sock);
+		free(sock);
 	}
 
 	void krom_set_bool_compute(const FunctionCallbackInfo<Value> &args) {

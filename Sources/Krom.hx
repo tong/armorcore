@@ -1,3 +1,11 @@
+
+enum Socket {}
+
+enum abstract SocketProtocol(Int) to Int {
+	var UDP;
+	var TCP;
+}
+
 extern class Krom {
 	static inline var KROM_API: Int = 6;
 
@@ -192,4 +200,12 @@ extern class Krom {
 
 	static function texsynthInpaint(w: Int, h: Int, bytesOut: js.lib.ArrayBuffer, bytesImage: js.lib.ArrayBuffer, bytesMask: js.lib.ArrayBuffer, tiling: Bool): Void;
 	static function mlInference(model: js.lib.ArrayBuffer, tensor: js.lib.ArrayBuffer): js.lib.ArrayBuffer;
+
+	static function openSocket(port : Int, host:Int, ?protocol: Int, ?blocking: Bool): Socket;
+	static function listenSocket(server: Socket, connections: Int): Bool;
+	static function acceptSocket(server: Socket): Socket;
+	static function connectSocket(port : Int, host:Int, ?protocol: SocketProtocol, ?blocking: Bool): Socket;
+	static function readSocket(socket: Socket, size : Int): js.lib.ArrayBuffer;
+	static function writeSocket(socket: Socket, data: js.lib.ArrayBuffer): Int;
+	static function destroySocket(socket: Socket): Void;
 }
