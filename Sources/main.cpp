@@ -31,8 +31,8 @@
 #include <kinc/compute/compute.h>
 
 #if defined(KORE_POSIX)
+#include <arpa/inet.h>
 #include <fcntl.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
 #endif
 
@@ -123,6 +123,8 @@ extern "C" const char *macgetresourcepath();
 #ifdef KORE_IOS
 extern "C" const char *iphonegetresourcepath();
 #endif
+
+#define ARMORCORE_VERSION	0x000000
 
 using namespace v8;
 
@@ -2410,21 +2412,38 @@ namespace {
 		HandleScope scope(args.GetIsolate());
 		unsigned int port = args[0]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
 		unsigned int host = args[1]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		kinc_socket_protocol protocol = (kinc_socket_protocol)args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		bool blocking = args[3]->ToBoolean(isolate)->Value();
+		printf("Blocking: %s\n", blocking ? "true" : "false");
 		kinc_socket_t *sock = (kinc_socket_t *)malloc(sizeof(kinc_socket_t));
-		kinc_socket_init(sock);
-		sock->handle = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (kinc_socket_connect(sock, host, port)) {
-			printf("SET NON BLOCKING MODE\n");
-			int value = 1;
-			if (fcntl(sock->handle, F_SETFL, O_NONBLOCK, value) == -1) {
+		switch (protocol) {
+		case KINC_SOCKET_PROTOCOL_UDP:
+			sock->handle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+			break;
+		case KINC_SOCKET_PROTOCOL_TCP:
+			sock->handle = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			break;
+		default:
+			kinc_log(KINC_LOG_LEVEL_ERROR, "Unsupported socket protocol.");
+			return;
+		}
+		if(!blocking) {
+			if(fcntl(sock->handle, F_SETFL, fcntl(sock->handle, F_GETFL) | O_NONBLOCK) < 0) {
 				kinc_log(KINC_LOG_LEVEL_ERROR, "Could not set non-blocking mode.");
 				return;
 			}
+		}
+		if (sock->handle <= 0) {
+			kinc_log(KINC_LOG_LEVEL_ERROR, "Could not create socket.");
+			return;
+		}
+		bool connected = kinc_socket_connect(sock, host, port);
+		printf("Connected: %s\n", connected ? "true" : "false");
+		if(connected || !blocking) {
 			Local<ObjectTemplate> templ = ObjectTemplate::New(isolate);
 			templ->SetInternalFieldCount(1);
 			Local<Object> obj = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
 			obj->SetInternalField(0, External::New(isolate, sock));
-			// Local<String> name = String::NewFromUtf8(isolate, "").ToLocalChecked();
 			args.GetReturnValue().Set(obj);
 		}
 	}
@@ -2435,18 +2454,18 @@ namespace {
 		unsigned int host = args[1]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
 		kinc_socket_protocol protocol = (kinc_socket_protocol)args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
 		bool blocking = args[3]->ToBoolean(isolate)->Value();
-		printf("SERVER BLOCKING %i\n", blocking);
+		// printf("Server blocking: %s\n", blocking ? "true" : "false");
 		kinc_socket_t *server = (kinc_socket_t *)malloc(sizeof(kinc_socket_t));
 		kinc_socket_init(server);
 		kinc_socket_options_t *options = (kinc_socket_options_t *)malloc(sizeof(kinc_socket_options_t));
-		kinc_socket_options_set_defaults(options);
 		options->non_blocking = blocking;
+		options->broadcast = false;
+		options->tcp_no_delay = false;
 		if(kinc_socket_open(server, protocol, port, options)) {
 			Local<ObjectTemplate> templ = ObjectTemplate::New(isolate);
 			templ->SetInternalFieldCount(1);
 			Local<Object> obj = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
 			obj->SetInternalField(0, External::New(isolate, server));
-			// Local<String> name = String::NewFromUtf8(isolate, "").ToLocalChecked(); //????
 			args.GetReturnValue().Set(obj);
 		}
 	}
@@ -2466,19 +2485,13 @@ namespace {
 		kinc_socket_t *server = (kinc_socket_t *)field->Value();
 		kinc_socket_t *client = (kinc_socket_t *)malloc(sizeof(kinc_socket_t));
 		kinc_socket_init(client);
-
-		/* printf("SET NON BLOCKING MODE\n");
 		int value = 1;
 		if (fcntl(client->handle, F_SETFL, O_NONBLOCK, value) == -1) {
 			kinc_log(KINC_LOG_LEVEL_ERROR, "Could not set non-blocking mode.");
-			// return false;
 		}
- */
-		printf(">>>>>>> 1\n");
-
-		unsigned int remoteAddress, remotePort;
+		unsigned int remoteAddress;
+		unsigned int remotePort;
 		if(kinc_socket_accept(server, client, &remoteAddress, &remotePort )) {
-			printf(">>>>>>> 2\n");
 			Local<ObjectTemplate> templ = ObjectTemplate::New(isolate);
 			templ->SetInternalFieldCount(1);
 			Local<Object> obj = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
@@ -2493,14 +2506,24 @@ namespace {
 		HandleScope scope(args.GetIsolate());
 		Local<External> field = Local<External>::Cast(args[0]->ToObject(isolate->GetCurrentContext()).ToLocalChecked()->GetInternalField(0));
 		kinc_socket_t *sock = (kinc_socket_t *)field->Value();
-		unsigned int size = args[1]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
-		unsigned char buf[size];
-		unsigned int bytes = kinc_socket_receive_connected(sock, buf, size);
-		if(bytes > 0) {
-			Local<ArrayBuffer> ab = ArrayBuffer::New(isolate, bytes);
-			memcpy(ab->GetContents().Data(), buf, bytes);
-			args.GetReturnValue().Set(ab); 
-		}
+		Local<ArrayBuffer> buffer = Local<ArrayBuffer>::Cast(args[1]);
+		unsigned int size = args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		ArrayBuffer::Contents content = buffer->GetContents();
+		unsigned int bytes = kinc_socket_receive_connected(sock, (unsigned char *)content.Data(), size);
+		args.GetReturnValue().Set(Int32::New(isolate, bytes));
+	}
+
+	void krom_socket_read_udp(const FunctionCallbackInfo<Value> &args) {
+		HandleScope scope(args.GetIsolate());
+		Local<External> field = Local<External>::Cast(args[0]->ToObject(isolate->GetCurrentContext()).ToLocalChecked()->GetInternalField(0));
+		kinc_socket_t *sock = (kinc_socket_t *)field->Value();
+		Local<ArrayBuffer> buffer = Local<ArrayBuffer>::Cast(args[1]);
+		unsigned int size = args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		unsigned int port = args[3]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		unsigned int host = args[4]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		ArrayBuffer::Contents content = buffer->GetContents();
+		unsigned int bytes = kinc_socket_receive(sock, (unsigned char *)content.Data(), size, &host, &port);
+		args.GetReturnValue().Set(Int32::New(isolate, bytes));
 	}
 
 	void krom_socket_write(const FunctionCallbackInfo<Value> &args) {
@@ -2510,6 +2533,18 @@ namespace {
 		Local<ArrayBuffer> buffer = Local<ArrayBuffer>::Cast(args[1]);
 		ArrayBuffer::Contents content = buffer->GetContents();
 		int sent = kinc_socket_send_connected(sock, (const unsigned char *)content.Data(), (int)content.ByteLength());
+		args.GetReturnValue().Set(sent);
+	}
+
+	void krom_socket_write_udp(const FunctionCallbackInfo<Value> &args) {
+		HandleScope scope(args.GetIsolate());
+		Local<External> field = Local<External>::Cast(args[0]->ToObject(isolate->GetCurrentContext()).ToLocalChecked()->GetInternalField(0));
+		kinc_socket_t *sock = (kinc_socket_t *)field->Value();
+		Local<ArrayBuffer> buffer = Local<ArrayBuffer>::Cast(args[1]);
+		unsigned int port = args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		unsigned int host = args[3]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		ArrayBuffer::Contents content = buffer->GetContents();
+		int sent = kinc_socket_send(sock, (unsigned char *)content.Data(), (int)content.ByteLength(), host, port );
 		args.GetReturnValue().Set(sent);
 	}
 
@@ -3601,12 +3636,15 @@ namespace {
 		krom->Set(String::NewFromUtf8(isolate, "getArg").ToLocalChecked(), FunctionTemplate::New(isolate, krom_get_arg));
 		krom->Set(String::NewFromUtf8(isolate, "getFilesLocation").ToLocalChecked(), FunctionTemplate::New(isolate, krom_get_files_location));
 		krom->Set(String::NewFromUtf8(isolate, "httpRequest").ToLocalChecked(), FunctionTemplate::New(isolate, krom_http_request));
+		// krom->Set(String::NewFromUtf8(isolate, "resolveHost").ToLocalChecked(), FunctionTemplate::New(isolate, krom_resolve_host));
 		krom->Set(String::NewFromUtf8(isolate, "openSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_open));
 		krom->Set(String::NewFromUtf8(isolate, "listenSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_listen));
 		krom->Set(String::NewFromUtf8(isolate, "acceptSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_accept));
 		krom->Set(String::NewFromUtf8(isolate, "connectSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_connect));
 		krom->Set(String::NewFromUtf8(isolate, "readSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_read));
+		krom->Set(String::NewFromUtf8(isolate, "readSocketUDP").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_read_udp));
 		krom->Set(String::NewFromUtf8(isolate, "writeSocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_write));
+		krom->Set(String::NewFromUtf8(isolate, "writeSocketUDP").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_write_udp));
 		krom->Set(String::NewFromUtf8(isolate, "destroySocket").ToLocalChecked(), FunctionTemplate::New(isolate, krom_socket_destroy));
 		krom->Set(String::NewFromUtf8(isolate, "setBoolCompute").ToLocalChecked(), FunctionTemplate::New(isolate, krom_set_bool_compute));
 		krom->Set(String::NewFromUtf8(isolate, "setIntCompute").ToLocalChecked(), FunctionTemplate::New(isolate, krom_set_int_compute));
@@ -4400,6 +4438,10 @@ int kickstart(int argc, char **argv) {
 		}
 		else if (strcmp(argv[i], "--consolepid") == 0) {
 			read_console_pid = true;
+		}
+		else if (strcmp(argv[i], "--version") == 0) {
+			printf("%d.%d.%d",ARMORCORE_VERSION>>16,(ARMORCORE_VERSION>>8)&0xFF,ARMORCORE_VERSION&0xFF);
+			return 0;
 		}
 	}
 

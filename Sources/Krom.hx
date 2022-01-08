@@ -146,6 +146,17 @@ extern class Krom {
 	static function getFilesLocation(): String;
 	static function httpRequest(url: String, size: Int, callback: js.lib.ArrayBuffer->Void): Void;
 
+	static function openSocket(port : Int, host:Int, protocol: SocketProtocol, blocking: Bool): Socket;
+	static function listenSocket(server: Socket, connections: Int): Bool;
+	static function acceptSocket(server: Socket): Socket;
+	static function connectSocket(port : Int, host:Int, ?protocol: SocketProtocol, ?blocking: Bool): Socket;
+	static function readSocket(socket: Socket, buffer: js.lib.ArrayBuffer, size : Int): Int;
+	static function readSocketUDP(socket: Socket, buffer: js.lib.ArrayBuffer, size: Int, port: Int, host : Int): Int;
+	static function writeSocket(socket: Socket, data: js.lib.ArrayBuffer): Int;
+	static function writeSocketUDP(socket: Socket, buffer: js.lib.ArrayBuffer, port: Int, host : Int): Int;
+	static function destroySocket(socket: Socket): Void;
+	static function resolveHost(name: String): js.lib.ArrayBuffer;
+
 	static function setBoolCompute(location: kha.compute.ConstantLocation, value: Bool): Void;
 	static function setIntCompute(location: kha.compute.ConstantLocation, value: Int): Void;
 	static function setFloatCompute(location: kha.compute.ConstantLocation, value: Float): Void;
@@ -201,11 +212,4 @@ extern class Krom {
 	static function texsynthInpaint(w: Int, h: Int, bytesOut: js.lib.ArrayBuffer, bytesImage: js.lib.ArrayBuffer, bytesMask: js.lib.ArrayBuffer, tiling: Bool): Void;
 	static function mlInference(model: js.lib.ArrayBuffer, tensor: js.lib.ArrayBuffer): js.lib.ArrayBuffer;
 
-	static function openSocket(port : Int, host:Int, ?protocol: Int, ?blocking: Bool): Socket;
-	static function listenSocket(server: Socket, connections: Int): Bool;
-	static function acceptSocket(server: Socket): Socket;
-	static function connectSocket(port : Int, host:Int, ?protocol: SocketProtocol, ?blocking: Bool): Socket;
-	static function readSocket(socket: Socket, size : Int): js.lib.ArrayBuffer;
-	static function writeSocket(socket: Socket, data: js.lib.ArrayBuffer): Int;
-	static function destroySocket(socket: Socket): Void;
 }
