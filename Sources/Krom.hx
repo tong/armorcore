@@ -1,3 +1,10 @@
+enum Socket {}
+
+enum abstract SocketProtocol(Int) to Int {
+	var UDP;
+	var TCP;
+}
+
 extern class Krom {
 	static inline var KROM_API: Int = 6;
 
@@ -79,7 +86,7 @@ extern class Krom {
 	static function loadUrl(url: String): Void;
 	static function copyToClipboard(text: String): Void;
 
-	static function init(title: String, width: Int, height: Int, samplesPerPixel: Int, vSync: Bool, frequency: Int, windowMode: Int, windowFeatures: Int, kromApi: Int, x: Int, y: Int): Void;
+    static function init(title: String, width: Int, height: Int, samplesPerPixel: Int, vSync: Bool, windowMode: Int, windowFeatures: Int, kromApi: Int): Void;
 	static function setApplicationName(name: String): Void;
 	static function log(v: Dynamic): Void;
 	static function setCallback(callback: Void->Void): Void;
@@ -137,6 +144,21 @@ extern class Krom {
 	static function getArg(index: Int): String;
 	static function getFilesLocation(): String;
 	static function httpRequest(url: String, size: Int, callback: js.lib.ArrayBuffer->Void): Void;
+
+    static function hostResolve(host: String): Int;
+    static function hostToString(ip: Float): String;
+	static function connectSocket(port: Int, host: String, ipv6: Bool): Socket;
+	static function setSocketBlock(socket: Socket, block: Bool): Bool;
+	static function setSocketBroadcast(socket: Socket): Bool;
+	static function setSocketNodelay(socket: Socket): Bool;
+	static function bindSocket(server: Socket, port: Int, host: String, ipv6: Bool): Bool;
+	static function listenSocket(server: Socket, connections: Int): Bool;
+	static function acceptSocket(server: Socket): Socket;
+	//static function selectSocket(server: Socket)
+	static function recvSocket(socket: Socket, buf: haxe.io.BytesData, size: Int, flags: Int): Int;
+	static function sendSocket(socket: Socket, buf: haxe.io.BytesData, size: Int, flags: Int): Int;
+	static function shutdownSocket(socket: Socket, r: Bool, w: Bool ): Bool;
+	static function closeSocket(socket: Socket): Int;
 
 	static function setBoolCompute(location: kha.compute.ConstantLocation, value: Bool): Void;
 	static function setIntCompute(location: kha.compute.ConstantLocation, value: Int): Void;
