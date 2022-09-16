@@ -147,15 +147,15 @@ extern class Krom {
 
     static function hostResolve(host: String): Int;
     static function hostToString(ip: Float): String;
-	static function connectSocket(port: Int, host: String, ipv6: Bool): Socket;
+	static function connectSocket(host: String, port: Int, type: Int, family: Int): Socket;
 	static function setSocketBlock(socket: Socket, block: Bool): Bool;
 	static function setSocketBroadcast(socket: Socket): Bool;
 	static function setSocketNodelay(socket: Socket): Bool;
-	static function bindSocket(server: Socket, port: Int, host: String, ipv6: Bool): Bool;
+	static function bindSocket(server: Socket, host: String, port: Int, type: Int, family: Int): Int;
 	static function listenSocket(server: Socket, connections: Int): Bool;
 	static function acceptSocket(server: Socket): Socket;
 	//static function selectSocket(server: Socket)
-	static function recvSocket(socket: Socket, buf: haxe.io.BytesData, size: Int, flags: Int): Int;
+	static function recvSocket(socket: Socket, buf: haxe.io.BytesData, size: Int, ?flags: Int): Int;
 	static function sendSocket(socket: Socket, buf: haxe.io.BytesData, size: Int, flags: Int): Int;
 	static function shutdownSocket(socket: Socket, r: Bool, w: Bool ): Bool;
 	static function closeSocket(socket: Socket): Int;

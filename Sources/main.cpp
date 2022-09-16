@@ -2444,30 +2444,35 @@ namespace {
 
     void krom_socket_connect(const FunctionCallbackInfo<Value> &args) {
 		HandleScope scope(args.GetIsolate());
-		unsigned int port = args[0]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
-        String::Utf8Value host(isolate, args[1]);
-		bool ipv6 = args[2]->ToBoolean(isolate)->Value();
+        String::Utf8Value host(isolate, args[0]);
+		unsigned int port = args[1]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+	    int type = args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+	    int family = args[3]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
 		kinc_socket_t *sock = (kinc_socket_t *)malloc(sizeof(kinc_socket_t));
-        if(kinc_socket_connect(sock, *host, port, ipv6) == 0) {
+        if(kinc_socket_connect(sock, *host, port, type, family) == 0) {
             Local<ObjectTemplate> templ = ObjectTemplate::New(isolate);
             templ->SetInternalFieldCount(1);
             Local<Object> obj = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
             obj->SetInternalField(0, External::New(isolate, sock));
             args.GetReturnValue().Set(obj);
-        } else {
-            args.GetReturnValue().SetNull();
+        // } else {
+        //     args.GetReturnValue().SetNull();
         }
     }
 
 	void krom_socket_bind(const FunctionCallbackInfo<Value> &args) {
         HandleScope scope(args.GetIsolate());
-        Local<External> field = Local<External>::Cast(args[0]->ToObject(isolate->GetCurrentContext()).ToLocalChecked()->GetInternalField(0));
-		kinc_socket_t *sock = (kinc_socket_t *)field->Value();
-		unsigned int port = args[1]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
-        String::Utf8Value host(isolate, args[2]);
-		bool ipv6 = args[3]->ToBoolean(isolate)->Value();
-        bool ok = kinc_socket_bind(sock, *host, port, ipv6);
-        args.GetReturnValue().Set(Boolean::New(isolate, ok));
+        String::Utf8Value host(isolate, args[0]);
+	    int port = args[1]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+	    int type = args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+	    int family = args[3]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		kinc_socket_t *sock = (kinc_socket_t *)malloc(sizeof(kinc_socket_t));
+        int r = kinc_socket_bind(sock, *host, port, type, family);
+        Local<ObjectTemplate> templ = ObjectTemplate::New(isolate);
+        templ->SetInternalFieldCount(1);
+        Local<Object> obj = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
+        obj->SetInternalField(0, External::New(isolate, sock));
+        args.GetReturnValue().Set(obj);
     }
 
 	void krom_socket_listen(const FunctionCallbackInfo<Value> &args) {
@@ -2528,8 +2533,8 @@ namespace {
 		kinc_socket_t *sock = (kinc_socket_t *)field->Value();
 		Local<ArrayBuffer> buf = Local<ArrayBuffer>::Cast(args[1]);
 		ArrayBuffer::Contents content = buf->GetContents();
-		int size = args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
-		int flags = args[3]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+		int size = args[2]->IsNullOrUndefined() ? (int)content.ByteLength() : args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
+        int flags = args[3]->IsNullOrUndefined() ? 0 : args[3]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
 		args.GetReturnValue().Set(Int32::New(isolate, kinc_socket_recv(sock, (char *)content.Data(), size, flags)));
 	}
 
@@ -2541,7 +2546,6 @@ namespace {
 		ArrayBuffer::Contents content = buf->GetContents();
 		int size = args[2]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
 		int flags = args[3]->ToInt32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
-		//args.GetReturnValue().Set(kinc_socket_send(sock, (char *)content.Data(), (int)content.ByteLength(), flags));
 		args.GetReturnValue().Set(kinc_socket_send(sock, (char *)content.Data(), size, flags));
 	}
 
@@ -2551,8 +2555,7 @@ namespace {
 		kinc_socket_t *sock = (kinc_socket_t *)field->Value();
 		bool r = args[1]->ToBoolean(isolate)->Value();
 		bool w = args[2]->ToBoolean(isolate)->Value();
-        bool ok = kinc_socket_shutdown(sock, r, w);
-        args.GetReturnValue().Set(Boolean::New(isolate, ok));
+        args.GetReturnValue().Set(Boolean::New(isolate, kinc_socket_shutdown(sock, r, w)));
     }
 
 	void krom_socket_close(const FunctionCallbackInfo<Value> &args) {
