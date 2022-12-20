@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Get Submodules
       run: git submodule update --init --recursive
     - name: Get msbuild
@@ -22,3 +22,8 @@ jobs:
         pathTarget: v8/libraries/win32/release/
     - name: Compile
       run: Kinc/make -g opengl --compile
+    - name: Store artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: krom_windows_opengl
+        path: Deployment
