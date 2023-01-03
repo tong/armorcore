@@ -1,0 +1,29 @@
+name: Windows (Vulkan)
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Get Submodules
+      run: git submodule update --init --recursive
+    - name: Get msbuild
+      uses: microsoft/setup-msbuild@v1
+    - name: Unpack v8_monolith
+      uses: DuckSoft/extract-7z-action@v1.0
+      with:
+        pathSource: v8/libraries/win32/release/v8_monolith.7z
+        pathTarget: v8/libraries/win32/release/
+    - name: Compile
+      run: Kinc/make -g vulkan --compile
+    - name: Store artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: krom_windows_vulkan
+        path: Deployment
