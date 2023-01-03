@@ -11,6 +11,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Setup Vulkan
+      run: |
+          Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/1.2.189.2/windows/VulkanSDK-1.2.189.2-Installer.exe" -OutFile VulkanSDK.exe
+          $installer = Start-Process -FilePath VulkanSDK.exe -Wait -PassThru -ArgumentList @("--da", "--al", "-c", "in");
+          $installer.WaitForExit();
     - name: Get Submodules
       run: git submodule update --init --recursive
     - name: Get msbuild
@@ -21,7 +26,7 @@ jobs:
         pathSource: v8/libraries/win32/release/v8_monolith.7z
         pathTarget: v8/libraries/win32/release/
     - name: Compile
-      run: Kinc/make -g vulkan --compile
+      run: Kinc/make -v vs2022 -g vulkan --compile
     - name: Store artifact
       uses: actions/upload-artifact@v3
       with:
