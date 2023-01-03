@@ -11,6 +11,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+      env:
+        VULKAN_SDK: C:\VulkanSDK\1.2.189.2
     - name: Setup Vulkan
       run: |
           Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/1.2.189.2/windows/VulkanSDK-1.2.189.2-Installer.exe" -OutFile VulkanSDK.exe
